@@ -27,7 +27,61 @@ module CouchRestRails
       fixtures_loaded.delete(database)
     end
   end
+
+  #
+  # Tests against CouchDB are SLOW due to the setup and teardown process.  If
+  # your tests do not alter the database, consider extending this class for
+  # faster tests.
+  #
+  class ReadOnlyTest < ActiveSupport::TestCase
+    cattr_accessor :expected_test_count
+
+    superclass_delegating_accessor :database
+    self.database = nil
+
+    setup :count_tests_and_setup_couchdb
+    teardown :teardown_couchdb_if_finished
+
+    class << self
+      def couchdb_fixtures(*databases)
+        self.database = databases.map { |d| d.to_s }
+      end
+      def setup_couchdb
+        CouchRestRails::Tests.setup(self.database) unless self.database.nil?
+      end
+      def teardown_couchdb
+        CouchRestRails::Tests.teardown(self.database) unless self.database.nil?
+      end
+
+      # Override these methods in your test class to provide custom one-time
+      # setup and teardown logic.
+      def global_setup; end
+      def global_teardown; end
+    end
+
+    def teardown_couchdb_if_finished
+      if (self.class.expected_test_count -= 1) == 0
+        self.class.global_teardown
+        self.class.teardown_couchdb
+        self.class.expected_test_count = nil
+      end
+    end
+
+    def count_tests_and_setup_couchdb
+      cls = self.class
+      unless cls.expected_test_count
+        cls.expected_test_count = (cls.instance_methods.reject{|method| method[0..3] != 'test'}).length
+        cls.setup_couchdb
+        cls.global_setup
+      end
+    end
+
+    # Override the following to short-circuit per test setup/teardown code
+    def setup_couchdb_fixtures; end
+    def teardown_couchdb_fixtures; end
+  end
 end
+
 module Test
   module Unit #:nodoc:
     class TestCase #:nodoc:
