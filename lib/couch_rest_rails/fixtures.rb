@@ -26,6 +26,35 @@ module CouchRestRails
       end
     end
 
+    def clear(database)
+      unless (database == "*" || File.exist?(File.join(RAILS_ROOT, CouchRestRails.setup_path, database)))
+        return  "Database '#{database}' doesn't exist"
+      end
+
+      Dir[File.join(RAILS_ROOT, CouchRestRails.setup_path, database)].each do |db|
+        db_name = COUCHDB_CONFIG[:db_prefix] +  File.basename( db) + COUCHDB_CONFIG[:db_suffix]
+        res = CouchRest.get("#{COUCHDB_CONFIG[:host_path]}/#{db_name}") rescue nil
+        if res
+          docs = []
+          db_con = CouchRest.database("#{COUCHDB_CONFIG[:host_path]}/#{db_name}")
+          rows = db_con.get("_all_docs")['rows']
+          unless rows.nil?
+            rows.each do |row|
+              unless row['id'] =~ /^_design/
+                docs << {"_id" => row['id'], "_rev" => row['value']['rev'], "_deleted" => true}
+              end
+            end
+          end
+          db_con.bulk_delete(docs) unless docs.empty?
+          return "All non design documents from '#{database}' deleted successfully"
+        else
+          return "Unable to connect to database '#{database}'"
+        end
+      end
+    rescue
+      return "Unable to clear fixtures from '#{database}"
+    end
+
     def dump(database)
       return  "Database '#{database}' doesn't exists" unless (database == "*" ||
                                                               File.exist?(File.join(RAILS_ROOT, CouchRestRails.setup_path, database)))
