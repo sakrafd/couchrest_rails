@@ -95,26 +95,22 @@ module CouchRestRails
   end
 end
 
-module Test
-  module Unit #:nodoc:
-    class TestCase #:nodoc:
-      setup :setup_couchdb_fixtures
-      teardown :teardown_couchdb_fixtures
+class ActiveSupport::TestCase
+  setup :setup_couchdb_fixtures
+  teardown :teardown_couchdb_fixtures
 
-      superclass_delegating_accessor :database
-      self.database = nil
+  superclass_delegating_accessor :database
+  self.database = nil
 
-      class << self
-        def couchdb_fixtures(*databases)
-          self.database = databases.map { |d| d.to_s }
-        end
-      end
-      def setup_couchdb_fixtures
-        CouchRestRails::Tests.setup(self.database) unless self.database.nil?
-      end
-      def teardown_couchdb_fixtures
-        CouchRestRails::Tests.teardown(self.database) unless self.database.nil?
-      end
+  class << self
+    def couchdb_fixtures(*databases)
+      self.database = databases.map { |d| d.to_s }
     end
+  end
+  def setup_couchdb_fixtures
+    CouchRestRails::Tests.setup(self.database) unless self.database.nil?
+  end
+  def teardown_couchdb_fixtures
+    CouchRestRails::Tests.teardown(self.database) unless self.database.nil?
   end
 end
