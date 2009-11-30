@@ -95,7 +95,7 @@ module CouchRestRails
   end
 end
 
-class ActiveSupport::TestCase
+class ActiveSupport::TestCase #:nodoc:
   setup :setup_couchdb_fixtures
   teardown :teardown_couchdb_fixtures
 

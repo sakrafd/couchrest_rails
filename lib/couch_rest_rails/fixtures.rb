@@ -11,6 +11,7 @@ module CouchRestRails
         db_name =COUCHDB_CONFIG[:db_prefix] +  File.basename( db) +
           COUCHDB_CONFIG[:db_suffix]
         res = CouchRest.get("#{COUCHDB_CONFIG[:host_path]}/#{db_name}") rescue nil
+        db_con = nil
         if res
           db_con = CouchRest.database("#{COUCHDB_CONFIG[:host_path]}/#{db_name}")
           Dir.glob(File.join(RAILS_ROOT, CouchRestRails.fixture_path, "#{database}.yml")).each do |file|
@@ -18,6 +19,7 @@ module CouchRestRails
             fixture_files << File.basename(file)
           end
         end
+        db_con && regenerate_all_views(db_con)
         if fixture_files.empty?
           return "No fixtures found in #{CouchRestRails.fixture_path}"
         else
@@ -46,6 +48,7 @@ module CouchRestRails
             end
           end
           db_con.bulk_delete(docs) unless docs.empty?
+          regenerate_all_views(db_con)
           return "All non design documents from '#{database}' deleted successfully"
         else
           return "Unable to connect to database '#{database}'"
@@ -53,6 +56,35 @@ module CouchRestRails
       end
     rescue
       return "Unable to clear fixtures from '#{database}"
+    end
+
+    MAX_RUNNING_TASKS = 2
+    ACTIVE_TASK_WAIT_TIME = 60
+
+    def regenerate_all_views(database)
+      # rebuild the all views...
+      rows = database.documents(:startkey=>"_design/",
+                                 :endkey=>"_design0/",
+                                 :include_docs => true)['rows']
+      rows.each { |design_doc_hash|
+        doc = design_doc_hash['doc']
+        design_doc =  doc['_id'].sub('_design/','')
+        doc_views = doc['views']
+        unless doc_views.nil? || doc_views.empty?
+          # just hit the first view for each one...
+          view_name = doc_views.keys[0]
+          begin
+            database.view("#{design_doc}/#{view_name}", :limit =>0)
+          rescue Exception => e
+            # check active tasks - wait unil there are no running
+            # tasks per db before starting a new one
+            # we timed out on the view...
+            while active_task_count >= MAX_RUNNING_TASKS
+              sleep ACTIVE_TASK_WAIT_TIME
+            end
+          end
+        end
+      }
     end
 
     def dump(database)
